@@ -4,6 +4,23 @@ struct ContentView: View {
     @StateObject var llamaState = LlamaState()
 
     @State private var multiLineText = ""
+    @State private var updater: Bool = false
+
+    private static func cleanupModelCaches() {
+        // Delete all models (*.gguf)
+        let fileManager = FileManager.default
+        let documentsUrl =  FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        do {
+            let fileURLs = try fileManager.contentsOfDirectory(at: documentsUrl, includingPropertiesForKeys: nil)
+            for fileURL in fileURLs {
+                if fileURL.pathExtension == "gguf" {
+                    try fileManager.removeItem(at: fileURL)
+                }
+            }
+        } catch {
+            print("Error while enumerating files \(documentsUrl.path): \(error.localizedDescription)")
+        }
+    }
 
     var body: some View {
         VStack {
@@ -34,6 +51,25 @@ struct ContentView: View {
                 .background(Color.blue)
                 .foregroundColor(.white)
                 .cornerRadius(8)
+            }
+
+            VStack {
+                DownloadButton(
+                    llamaState: llamaState,
+                    modelName: "TheBloke / TinyLlama-1.1B-1T-OpenOrca-GGUF (Q4_0)",
+                    modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_0.gguf?download=true",
+                    filename: "tinyllama-1.1b-1t-openorca.Q4_0.gguf"
+                )
+                DownloadButton(
+                    llamaState: llamaState,
+                    modelName: "TheBloke / TinyLlama-1.1B-1T-OpenOrca-GGUF (Q8_0)",
+                    modelUrl: "https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q8_0.gguf?download=true",
+                    filename: "tinyllama-1.1b-1t-openorca.Q8_0.gguf"
+                )
+                Button("Clear downloaded models") {
+                    ContentView.cleanupModelCaches()
+                    llamaState.cacheCleared = true
+                }
             }
         }
         .padding()
