@@ -233,8 +233,17 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
     uint8_t * spad_m = factx->spad_m + (mask ? factx->size_m_block * HVX_FA_DMA_CACHE_SIZE : 0) * ith;
     uint8_t * spad_a = factx->spad_a + factx->size_vkq_acc * ith;
 
+    uint32_t m_cache_size = HVX_FA_DMA_CACHE_SIZE;
+    if (mask) {
+        const uint32_t m_cycle = factx->n_blocks * neq1 * mask->ne[2];
+        if (m_cycle <= HVX_FA_DMA_CACHE_SIZE) {
+            // keep at least 4 slots since up to two blocks are in flight ahead of the one being used
+            m_cache_size = m_cycle * ((4 + m_cycle - 1) / m_cycle);
+        }
+    }
+
     dma_cache m_cache;
-    dma_cache_init(&m_cache, spad_m, factx->size_m_block, HVX_FA_DMA_CACHE_SIZE);
+    dma_cache_init(&m_cache, spad_m, factx->size_m_block, m_cache_size);
 
     const size_t size_vkq_acc_single = hex_round_up(DV * sizeof(float), 128);
 
@@ -328,7 +337,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
             // Mask
             if (mask) {
                 const dma_addr_t m_src = mp_base + ic_start * sizeof(__fp16);
-                dma_cache_push(dma_q, &m_cache, m_src, current_block_size * 2, current_block_size * 2, current_block_size * 2, 1);
+                dma_cache_push_seq(dma_q, &m_cache, m_src, current_block_size * 2, current_block_size * 2, current_block_size * 2, 1);
             }
         }
 
@@ -537,7 +546,7 @@ static void flash_attn_ext_f16_thread(unsigned int nth, unsigned int ith, void *
                     // Mask
                     if (mask) {
                         const dma_addr_t m_src = mp_base + next_ic_start * sizeof(__fp16);
-                        dma_cache_push(dma_q, &m_cache, m_src, next_block_size * 2, next_block_size * 2, next_block_size * 2, 1);
+                        dma_cache_push_seq(dma_q, &m_cache, m_src, next_block_size * 2, next_block_size * 2, next_block_size * 2, 1);
                     }
                 }
             } // end for g

@@ -432,6 +432,7 @@ typedef struct {
     uint8_t *base;
     uint32_t line_size;
     uint32_t capacity;
+    uint32_t pos;                       // next slot for dma_cache_push_seq
     dma_addr_t src[DMA_CACHE_MAX_SIZE];
     uint16_t age[DMA_CACHE_MAX_SIZE];
 } dma_cache;
@@ -441,6 +442,7 @@ static inline void dma_cache_init(dma_cache *c, uint8_t *base, uint32_t line_siz
     c->capacity  = (capacity > DMA_CACHE_MAX_SIZE) ? DMA_CACHE_MAX_SIZE : capacity;
     c->base      = base;
     c->line_size = line_size;
+    c->pos       = 0;
 
     for (unsigned i=0; i < c->capacity; i++) {
         c->src[i] = 0;
@@ -471,6 +473,22 @@ static inline bool dma_cache_push(dma_queue *q, dma_cache *c, dma_addr_t src_add
     }
 
     return dma_queue_push_single_1d(q, dma_make_data(dst, src_addr), 0);
+}
+
+// same as dma_cache_push but for sources that repeat in a fixed cyclic order: slots are used in ring order
+static inline bool dma_cache_push_seq(dma_queue *q, dma_cache *c, dma_addr_t src_addr, uint32_t dst_stride, uint32_t src_stride, uint32_t row_size, uint32_t nrows)
+{
+    const uint32_t i = c->pos;
+    uint8_t *  dst = c->base + (i * c->line_size);
+
+    c->pos = (i + 1 < c->capacity) ? i + 1 : 0;
+
+    if (c->src[i] == src_addr) {
+        return dma_queue_push_single_1d(q, dma_make_data(dst, src_addr), 0); // dummy dma
+    }
+
+    c->src[i] = src_addr;
+    return dma_queue_push(q, dma_make_data(dst, src_addr), dst_stride, src_stride, row_size, nrows);
 }
 
 #ifdef __cplusplus
